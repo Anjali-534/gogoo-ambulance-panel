@@ -15,11 +15,13 @@ interface Booking {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending:    'bg-amber-100 text-amber-700',
-  accepted:   'bg-blue-100 text-blue-700',
-  in_progress:'bg-purple-100 text-purple-700',
-  completed:  'bg-green-100 text-green-700',
-  cancelled:  'bg-red-100 text-red-700',
+  searching:   'bg-yellow-100 text-yellow-700',
+  pending:     'bg-amber-100 text-amber-700',
+  accepted:    'bg-blue-100 text-blue-700',
+  arriving:    'bg-violet-100 text-violet-700',
+  in_progress: 'bg-purple-100 text-purple-700',
+  completed:   'bg-green-100 text-green-700',
+  cancelled:   'bg-red-100 text-red-700',
 };
 
 export default function AllBookingsPage() {

@@ -13,36 +13,48 @@ const GREEN = '#22C55E';
 const BLUE  = '#3B82F6';
 const COLORS = [RED, GREEN, BLUE, '#F59E0B', '#8B5CF6', '#06B6D4', '#EC4899'];
 
+interface AmbBooking {
+  id: string; status: string; created_at: string;
+  fare: number; rider_name: string; rider_phone: string;
+  service_name: string; vehicle_type: string;
+  hospital_name?: string; ambulance_sub_type?: string;
+  is_free_ambulance: boolean; purpose_type?: string;
+  pickup_address: string; drop_address: string;
+}
+
 export default function AnalyticsPage() {
-  const [hospitals, setHospitals] = useState<{ name: string; total_bookings: number; rating: number; base_fare: number }[]>([]);
-  const [ngos,      setNgos]      = useState<{ vehicle_count: number; is_active: boolean; type: string; coverage_areas: string[] }[]>([]);
-  const [bookings,  setBookings]  = useState<{ status: string; created_at: string; ambulance_type: string; estimated_fare: number }[]>([]);
-  const [loading,   setLoading]   = useState(true);
+  const [hospitals,   setHospitals]   = useState<{ name: string; total_bookings: number; rating: number; base_fare: number }[]>([]);
+  const [ngos,        setNgos]        = useState<{ vehicle_count: number; is_active: boolean; type: string; coverage_areas: string[] }[]>([]);
+  const [bookings,    setBookings]    = useState<{ status: string; created_at: string; ambulance_type: string; estimated_fare: number }[]>([]);
+  const [allBookings, setAllBookings] = useState<AmbBooking[]>([]);
+  const [loading,     setLoading]     = useState(true);
 
   const token = () => localStorage.getItem('ambulance_admin_token') ?? '';
 
   const load = useCallback(async () => {
     try {
       const hdrs = { Authorization: `Bearer ${token()}` };
-      const [hRes, nRes, bRes] = await Promise.all([
+      const [hRes, nRes, bRes, aRes] = await Promise.all([
         axios.get(`${API}/gogoo/ambulance/hospitals`,         { headers: hdrs }),
         axios.get(`${API}/gogoo/ambulance/ngos`,              { headers: hdrs }),
         axios.get(`${API}/gogoo/ambulance/bookings/hospital`, { headers: hdrs }),
+        axios.get(`${API}/gogoo/ambulance/all-bookings`,      { headers: hdrs }),
       ]);
-      setHospitals(hRes.data || []);
-      setNgos(nRes.data      || []);
-      setBookings(bRes.data  || []);
+      setHospitals(hRes.data  || []);
+      setNgos(nRes.data       || []);
+      setBookings(bRes.data   || []);
+      setAllBookings(aRes.data || []);
     } catch { toast.error('Failed to load analytics'); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  // Last 30 days booking trend
+  // Last 30 days booking trend (from all ambulance bookings)
   const trend30 = Array.from({ length: 30 }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() - (29 - i));
     const ds = d.toDateString();
-    const count = bookings.filter(b => new Date(b.created_at).toDateString() === ds).length;
+    const count = allBookings.filter(b => new Date(b.created_at).toDateString() === ds).length;
     return { day: d.getDate() + '/' + (d.getMonth() + 1), count };
   });
 
@@ -64,9 +76,27 @@ export default function AnalyticsPage() {
   ngos.forEach(n => { const t = (n as { type: string }).type || 'ngo'; ngoMap[t] = (ngoMap[t] || 0) + 1; });
   const ngoTypeData = Object.entries(ngoMap).map(([name, value]) => ({ name: name.replace('_',' '), value }));
 
-  // Revenue data
-  const totalRevenue = bookings.filter(b => b.status === 'completed').reduce((s, b) => s + (b.estimated_fare || 0), 0);
-  const completionRate = bookings.length ? Math.round((bookings.filter(b => b.status === 'completed').length / bookings.length) * 100) : 0;
+  // Revenue from paid completed ambulance bookings (main bookings table)
+  const paidCompleted  = allBookings.filter(b => !b.is_free_ambulance && b.status === 'completed');
+  const totalRevenue   = paidCompleted.reduce((s, b) => s + (b.fare || 0), 0);
+  const totalCompleted = allBookings.filter(b => b.status === 'completed').length;
+  const completionRate = allBookings.length ? Math.round((totalCompleted / allBookings.length) * 100) : 0;
+
+  // Free vs paid split
+  const freeCount = allBookings.filter(b => b.is_free_ambulance).length;
+  const paidCount = allBookings.filter(b => !b.is_free_ambulance).length;
+  const freePaidData = [
+    { name: 'Free', value: freeCount },
+    { name: 'Paid', value: paidCount },
+  ].filter(d => d.value > 0);
+
+  // BLS / ALS / Transport split from ambulance_sub_type
+  const subTypeMap: Record<string, number> = {};
+  allBookings.forEach(b => {
+    const t = b.ambulance_sub_type?.toUpperCase() || 'Other';
+    subTypeMap[t] = (subTypeMap[t] || 0) + 1;
+  });
+  const subTypeData = Object.entries(subTypeMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 
   if (loading) return (
     <div className="space-y-4 animate-pulse">
@@ -85,10 +115,10 @@ export default function AnalyticsPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Total Hospitals',  value: hospitals.length, icon: '🏥' },
-          { label: 'Total NGOs',       value: ngos.length,      icon: '❤️' },
-          { label: 'Total Bookings',   value: bookings.length,  icon: '📋' },
-          { label: 'Completion Rate',  value: `${completionRate}%`, icon: '✅' },
+          { label: 'Total Hospitals',     value: hospitals.length,    icon: '🏥' },
+          { label: 'Total NGOs',          value: ngos.length,         icon: '❤️' },
+          { label: 'Total Amb. Bookings', value: allBookings.length,  icon: '🚑' },
+          { label: 'Completion Rate',     value: `${completionRate}%`, icon: '✅' },
         ].map(s => (
           <div key={s.label} className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-3">
             <span className="text-2xl">{s.icon}</span>
@@ -98,6 +128,77 @@ export default function AnalyticsPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Free vs Paid + BLS/ALS split */}
+      <div className="grid grid-cols-3 gap-5">
+        <div className="bg-white rounded-2xl border border-gray-100 p-6">
+          <p className="font-bold text-gray-900 mb-4">Free vs Paid</p>
+          {freePaidData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie data={freePaidData} cx="50%" cy="50%" outerRadius={65} dataKey="value" labelLine={false}
+                    label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`}>
+                    {freePaidData.map((_, i) => <Cell key={i} fill={i === 0 ? GREEN : RED} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-1.5 mt-2">
+                {freePaidData.map((d, i) => (
+                  <div key={d.name} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ background: i === 0 ? GREEN : RED }} />
+                      {d.name}
+                    </div>
+                    <span className="font-semibold text-gray-700">{d.value}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : <p className="text-gray-400 text-sm text-center py-8">No data yet</p>}
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 p-6">
+          <p className="font-bold text-gray-900 mb-4">BLS / ALS / Transport</p>
+          {subTypeData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie data={subTypeData} cx="50%" cy="50%" outerRadius={65} dataKey="value" labelLine={false}
+                    label={({ name, percent }) => percent > 0.08 ? `${name} ${(percent*100).toFixed(0)}%` : ''}>
+                    {subTypeData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-1.5 mt-2">
+                {subTypeData.map((d, i) => (
+                  <div key={d.name} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                      {d.name}
+                    </div>
+                    <span className="font-semibold text-gray-700">{d.value}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : <p className="text-gray-400 text-sm text-center py-8">No sub-type data yet</p>}
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 p-6">
+          <p className="font-bold text-gray-900 mb-2">Paid Revenue</p>
+          <p className="text-3xl font-bold text-red-600">₹{totalRevenue.toLocaleString('en-IN')}</p>
+          <p className="text-xs text-gray-400 mt-1">{paidCompleted.length} paid completed rides</p>
+          <div className="mt-4 space-y-2 text-xs">
+            <div className="flex justify-between"><span className="text-gray-500">Total Bookings</span><span className="font-bold">{allBookings.length}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Free</span><span className="font-bold text-green-600">{freeCount}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Paid</span><span className="font-bold text-orange-600">{paidCount}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Completed</span><span className="font-bold text-green-700">{totalCompleted}</span></div>
+          </div>
+        </div>
       </div>
 
       {/* 30-day trend */}
@@ -210,9 +311,9 @@ export default function AnalyticsPage() {
       {/* Revenue */}
       <div className="bg-red-50 border border-red-100 rounded-2xl p-6 flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold text-red-700">Total Estimated Revenue (Completed Bookings)</p>
+          <p className="text-sm font-semibold text-red-700">Revenue from Paid Ambulances (Completed)</p>
           <p className="text-3xl font-bold text-red-600 mt-1">₹{totalRevenue.toLocaleString('en-IN')}</p>
-          <p className="text-xs text-red-400 mt-0.5">From {bookings.filter(b => b.status === 'completed').length} completed hospital bookings</p>
+          <p className="text-xs text-red-400 mt-0.5">From {paidCompleted.length} paid completed bookings · {freeCount} free rides (₹0 revenue)</p>
         </div>
         <div className="text-6xl opacity-20">💰</div>
       </div>
