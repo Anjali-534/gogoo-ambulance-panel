@@ -100,12 +100,12 @@ export default function AllBookingsPage() {
         ) : (
           <table className="w-full">
             <thead><tr className="bg-gray-50">
-              {['Rider','Service','Pickup → Drop','Fare','Status','Date'].map(h => (
+              {['Rider','Service','Hospital','Type','Free/Paid','Pickup → Drop','Fare','Status','Date'].map(h => (
                 <th key={h} className="text-left px-5 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider">{h}</th>
               ))}
             </tr></thead>
             <tbody>
-              {paged.map(b => (
+              {paged.map((b: any) => (
                 <tr key={b.id} className="border-t border-gray-50 hover:bg-gray-50/50">
                   <td className="px-5 py-3">
                     <p className="font-semibold text-gray-900 text-sm">{b.rider_name || '—'}</p>
@@ -113,12 +113,35 @@ export default function AllBookingsPage() {
                   </td>
                   <td className="px-5 py-3">
                     <span className="bg-red-50 text-red-600 text-xs px-2 py-0.5 rounded-full font-medium">{b.service_name || 'Ambulance'}</span>
+                    {b.purpose_type && (
+                      <p className="text-xs text-gray-400 mt-1 capitalize">{b.purpose_type.replace('_',' ')}</p>
+                    )}
+                  </td>
+                  <td className="px-5 py-3 max-w-[140px]">
+                    {b.hospital_name
+                      ? <p className="text-xs font-semibold text-gray-800 truncate">{b.hospital_name}</p>
+                      : <p className="text-xs text-gray-400">—</p>
+                    }
+                  </td>
+                  <td className="px-5 py-3">
+                    {b.ambulance_sub_type
+                      ? <span className="bg-blue-50 text-blue-700 text-xs px-2 py-0.5 rounded-full font-semibold uppercase">{b.ambulance_sub_type}</span>
+                      : <span className="text-xs text-gray-400">—</span>
+                    }
+                  </td>
+                  <td className="px-5 py-3">
+                    {b.is_free_ambulance
+                      ? <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-semibold">🆓 Free</span>
+                      : <span className="bg-orange-50 text-orange-600 text-xs px-2 py-0.5 rounded-full font-semibold">💰 Paid</span>
+                    }
                   </td>
                   <td className="px-5 py-3 max-w-[180px]">
                     <p className="text-xs text-gray-600 truncate">{b.pickup_address}</p>
                     <p className="text-xs text-gray-400 truncate">{b.drop_address}</p>
                   </td>
-                  <td className="px-5 py-3 text-sm font-semibold text-gray-900">₹{b.fare || 0}</td>
+                  <td className="px-5 py-3 text-sm font-semibold text-gray-900">
+                    {b.is_free_ambulance ? <span className="text-green-600 font-bold">FREE</span> : `₹${b.fare || 0}`}
+                  </td>
                   <td className="px-5 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-semibold capitalize ${STATUS_COLORS[b.status] || 'bg-gray-100 text-gray-600'}`}>{b.status}</span>
                   </td>
