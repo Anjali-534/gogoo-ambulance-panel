@@ -27,13 +27,15 @@ const STATUS_COLORS: Record<string, string> = {
 const STATUSES = ['all', 'pending', 'confirmed', 'dispatched', 'completed', 'cancelled'];
 
 export default function PaidBookingsPage() {
-  const [bookings,  setBookings]  = useState<Booking[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [search,    setSearch]    = useState('');
-  const [statusF,   setStatusF]   = useState('all');
-  const [page,      setPage]      = useState(1);
-  const [updating,  setUpdating]  = useState<string | null>(null);
-  const [showNote,  setShowNote]  = useState<Booking | null>(null);
+  const [bookings,      setBookings]      = useState<Booking[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [search,        setSearch]        = useState('');
+  const [statusF,       setStatusF]       = useState('all');
+  const [page,          setPage]          = useState(1);
+  const [updating,      setUpdating]      = useState<string | null>(null);
+  const [showNote,      setShowNote]      = useState<Booking | null>(null);
+  const [rejectTarget,  setRejectTarget]  = useState<string | null>(null);
+  const [rejectReason,  setRejectReason]  = useState('');
 
   const token = () => localStorage.getItem('ambulance_admin_token') ?? '';
   const hdrs  = () => ({ Authorization: `Bearer ${token()}` });
@@ -157,10 +159,7 @@ export default function PaidBookingsPage() {
                             className="px-2.5 py-1 bg-green-500 text-white rounded-lg text-xs font-bold hover:bg-green-600 disabled:opacity-50 transition-colors">
                             Confirm
                           </button>
-                          <button onClick={() => {
-                            const reason = window.prompt('Rejection reason (optional):') ?? '';
-                            updateStatus(b.id, 'cancelled', reason);
-                          }} disabled={updating === b.id}
+                          <button onClick={() => { setRejectTarget(b.id); setRejectReason(''); }} disabled={updating === b.id}
                             className="px-2.5 py-1 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 disabled:opacity-50 transition-colors">
                             Cancel
                           </button>
@@ -197,6 +196,35 @@ export default function PaidBookingsPage() {
           <Pagination page={page} total={filtered.length} perPage={PER_PAGE} onChange={setPage} />
         </div>
       </div>
+
+      {/* Reject/Cancel modal */}
+      {rejectTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-96 space-y-4">
+            <h3 className="font-bold text-gray-900">Cancel Booking</h3>
+            <p className="text-sm text-gray-500">Provide a rejection reason (optional):</p>
+            <textarea
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              rows={3}
+              placeholder="e.g. No ambulance available in area..."
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400"
+            />
+            <div className="flex gap-3">
+              <button onClick={() => setRejectTarget(null)} className="flex-1 border border-gray-200 rounded-xl py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+                Back
+              </button>
+              <button
+                onClick={() => { updateStatus(rejectTarget, 'cancelled', rejectReason); setRejectTarget(null); setRejectReason(''); }}
+                disabled={!!updating}
+                className="flex-1 bg-red-500 text-white rounded-xl py-2 text-sm font-bold hover:bg-red-600 disabled:opacity-60 transition-colors"
+              >
+                Confirm Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Note modal */}
       {showNote && (
